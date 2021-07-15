@@ -23,7 +23,7 @@ ui <- shinyUI(fluidPage(
       textInput("spec_id", "LRA Spec ID"),
       textInput("lot_number", "PMD Orderable Lot Number"),
       textInput("date", "Date"),
-      selectInput("vial_kit", label = "Kit of Vial?",
+      selectInput("vial_kit", label = "Kit or Vial?",
                   choices = c("Kit","Vial",""), selected = ""),
       actionButton("approve","Approve")
     ),
