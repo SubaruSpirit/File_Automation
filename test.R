@@ -193,68 +193,72 @@ server <- shinyServer(function(input, output, session) {
   
   
   observeEvent(input$next_pdf, {
-
-
     
-    file.rename(input$file_import$datapath[x()], "0.pdf")
-    file.copy("0.pdf","www", overwrite = T)
-    
-    output$pdfview <- renderUI({
-      tags$iframe(style="height:1200px; width:100%", src="0.pdf")
-    })
-    
-    pngfile1 <- pdftools::pdf_convert("0.pdf",dpi = 300)
-    text1 <- tesseract::ocr(pngfile1)
-    df1 = as_tibble(text1)
-    r1 = df1 %>%
+    if(x()<length(input$file_import$datapath)){
+      x(x()+1)
+      file.rename(input$file_import$datapath[x()], "0.pdf")
+      file.copy("0.pdf","www", overwrite = T)
+      
+      output$pdfview <- renderUI({
+        tags$iframe(style="height:1200px; width:100%", src="0.pdf")
+      })
+      
+      pngfile1 <- pdftools::pdf_convert("0.pdf",dpi = 300)
+      text1 <- tesseract::ocr(pngfile1)
+      df1 = as_tibble(text1)
+      r1 = df1 %>%
         unnest_tokens(word, value, to_lower = F)
+      
+      
+      # document type
+      updateSelectInput(session, "type", selected = 
+                          if(paste(r1[3,],r1[4,],r1[5,])==
+                             "Label Specification Approval")
+                          {"Label Specification Approval Form (ie variable text approval)"}else{""})
+      
+      
+      # trial number
+      updateTextInput(session, "trial_number", value = 
+                        as.character(r1[which(grepl("Trial", r1[["word"]]))+2,]))
+      
+      
+      # spec id
+      updateTextInput(session, "spec_id", value = 
+                        paste(as.character(r1[which(grepl("Spec", r1[["word"]]))[2]+2,]),
+                              "-",
+                              as.character(r1[which(grepl("Spec", r1[["word"]]))[2]+3,]),
+                              sep=""
+                        )
+      )
+      
+      
+      # lot number
+      updateTextInput(session, "lot_number", value = 
+                        as.character(r1[which(grepl("Lot", r1[["word"]]))+2,])
+      )
+      
+      
+      # date
+      updateTextInput(session, "date", value = 
+                        paste(as.character(r1[which(grepl("QA", r1[["word"]]))[2]+1,]),
+                              "-",
+                              as.character(r1[which(grepl("QA", r1[["word"]]))[2]+2,]),
+                              "-",
+                              as.character(r1[which(grepl("QA", r1[["word"]]))[2]+3,]),
+                              sep=""
+                        )
+      )
+      
+      
+      # vial or kit
+      updateSelectInput(session, "vial_kit", selected = 
+                          if(length(which(grepl("PRIMARY", r1[["word"]])))==1){
+                            "Vial"
+                          } else{"Kit"})
+    } else {output$end = renderText("You have reached the last PDF!")}
+
     
     
-    # document type
-    updateSelectInput(session, "type", selected = 
-                        if(paste(r1[3,],r1[4,],r1[5,])==
-                           "Label Specification Approval")
-                        {"Label Specification Approval Form (ie variable text approval)"}else{""})
-    
-    
-    # trial number
-    updateTextInput(session, "trial_number", value = 
-                      as.character(r1[which(grepl("Trial", r1[["word"]]))+2,]))
-    
-    
-    # spec id
-    updateTextInput(session, "spec_id", value = 
-                      paste(as.character(r1[which(grepl("Spec", r1[["word"]]))[2]+2,]),
-                            "-",
-                            as.character(r1[which(grepl("Spec", r1[["word"]]))[2]+3,]),
-                            sep=""
-                      )
-    )
-    
-    
-    # lot number
-    updateTextInput(session, "lot_number", value = 
-                      as.character(r1[which(grepl("Lot", r1[["word"]]))+2,])
-    )
-    
-    
-    # date
-    updateTextInput(session, "date", value = 
-                      paste(as.character(r1[which(grepl("QA", r1[["word"]]))[2]+1,]),
-                            "-",
-                            as.character(r1[which(grepl("QA", r1[["word"]]))[2]+2,]),
-                            "-",
-                            as.character(r1[which(grepl("QA", r1[["word"]]))[2]+3,]),
-                            sep=""
-                      )
-    )
-    
-    
-    # vial or kit
-    updateSelectInput(session, "vial_kit", selected = 
-                        if(length(which(grepl("PRIMARY", r1[["word"]])))==1){
-                          "Vial"
-                        } else{"Kit"})
     
 
     
