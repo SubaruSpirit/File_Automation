@@ -19,12 +19,11 @@ ui <- shinyUI(fluidPage(
       tableOutput("files"),
       selectInput("type", label = "Document Type",
                   choices = c(list1[["document_type"]],""),selected = ""),
-      textInput("trial_number", "Trial Number"),
-      textInput("spec_id", "LRA Spec ID"),
-      textInput("lot_number", "PMD Orderable Lot Number"),
-      textInput("date", "Date"),
-      selectInput("vial_kit", label = "Kit or Vial?",
-                  choices = c("Kit","Vial",""), selected = ""),
+      uiOutput("trial_number"),
+      uiOutput("spec_id"),
+      uiOutput("lot_number"),
+      uiOutput("date"),
+      uiOutput("vial_kit"),
       actionButton("approve","Approve"),
       textOutput("feedback"),
       actionButton("next_pdf","Next PDF"),
@@ -54,127 +53,205 @@ server <- shinyServer(function(input, output, session) {
     output$pdfview <- renderUI({
       tags$iframe(style="height:1200px; width:100%", src="0.pdf")
     })
-  })
-  
-  ### OCR ####################################################################
-  pngfile1 <- reactive({pdftools::pdf_convert("0.pdf",
-                                              dpi = 300)})
-  text1 <- reactive({tesseract::ocr(pngfile1())})
-  df1 = reactive({as_tibble(text1())})
-  r1 = reactive({df1() %>%
-      unnest_tokens(word, value, to_lower = F)})
-  
-  # document type
-  observeEvent(input$file_import,{
+    
+    ### OCR ###########################################################
+    pngfile1 <- reactive({pdftools::pdf_convert("0.pdf",
+                                                dpi = 300)})
+    text1 <- reactive({tesseract::ocr(pngfile1())})
+    df1 = reactive({as_tibble(text1())})
+    r1 = reactive({df1() %>%
+        unnest_tokens(word, value, to_lower = F)})
+    ########################################################################
+    
+    # document type
     updateSelectInput(session, "type", selected = 
-                        if(paste(r1()[3,],r1()[4,],r1()[5,])==
-                           "Label Specification Approval")
-                        {"Label Specification Approval Form (ie variable text approval)"}else{""})
-  })
-  
-  # trial number
-  observeEvent(input$file_import,{
-    updateTextInput(session, "trial_number", value = 
-                      as.character(r1()[which(grepl("Trial", r1()[["word"]]))+2,]))
-  })
-  
-  # spec id
-  observeEvent(input$file_import,{
-    updateTextInput(session, "spec_id", value = 
-                      paste(as.character(r1()[which(grepl("Spec", r1()[["word"]]))[2]+2,]),
-                            "-",
-                            as.character(r1()[which(grepl("Spec", r1()[["word"]]))[2]+3,]),
-                            sep=""
-                      )
+                        if((which(grepl("\\<LRA\\>", r1()[["word"]]))[1] +1 ==
+                            which(grepl("\\<Spec\\>", r1()[["word"]]))[1]) &
+                           (which(grepl("\\<Spec\\>", r1()[["word"]]))[1] +1 ==
+                            # %in% TRUE: return FALSE when it's NA
+                            which(grepl("\\<ID\\>", r1()[["word"]]))[1])%in% TRUE)
+                        {"Label Specification Approval Form (ie variable text approval)"}
+                      else if ((which(grepl("\\<P\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<L\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<L\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Plan\\>", r1()[["word"]]))[1])%in% TRUE){
+                        "Pack and Label Plan"}
     )
-  })
-  
-  # lot number
-  observeEvent(input$file_import,{
-    updateTextInput(session, "lot_number", value = 
-                      as.character(r1()[which(grepl("Lot", r1()[["word"]]))+2,])
-    )
-  })
-  
-  # date
-  observeEvent(input$file_import,{
-    updateTextInput(session, "date", value = 
-                      paste(as.character(r1()[which(grepl("QA", r1()[["word"]]))[2]+1,]),
-                            "-",
-                            as.character(r1()[which(grepl("QA", r1()[["word"]]))[2]+2,]),
-                            "-",
-                            as.character(r1()[which(grepl("QA", r1()[["word"]]))[2]+3,]),
-                            sep=""
-                      )
-    )
-  })
-  
-  # vial or kit
-  observeEvent(input$file_import,{
-    updateSelectInput(session, "vial_kit", selected = 
-                        if(length(which(grepl("PRIMARY", r1()[["word"]])))==1){
-                          "Vial"
-                        } else{"Kit"})
-  })
-  
-  
-  ### To be deleted #############################################################  
-  # put the critical info into the dataframe
-  observeEvent(input$file_import,{
+    
+    
+    # trial number
+    output$trial_number = renderUI({
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
+      } else if (input$type=="Pack and Label Plan"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
+      }
+    })
+    
+    # spec id
+    output$spec_id = renderUI({
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        textInput("spec_id", label = "LRA Spec ID",
+                  value = 
+                    paste(as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+2,]),
+                          "-",
+                          as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+3,]),
+                          sep=""
+                    )
+        )
+      } else{""}
+    })
+    
+    # lot number
+    output$lot_number = renderUI({
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        textInput("lot_number", label = "PMD Orderable Lot Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+2,])
+        )
+      } else if (input$type=="Pack and Label Plan"){
+        textInput("lot_number", label = "PMD Orderable Lot Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+1,])
+        )
+      }
+    })
+    
+    # date
+    output$date = renderUI({
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        textInput("date", label = "Date",
+                  value = 
+                    paste(as.character(r1()[last(which(grepl("\\<QA\\>", r1()[["word"]])))+1,]),
+                          "-",
+                          as.character(r1()[last(which(grepl("\\<QA\\>", r1()[["word"]])))+2,]),
+                          "-",
+                          as.character(r1()[last(which(grepl("\\<QA\\>", r1()[["word"]])))+3,]),
+                          sep=""
+                    )
+        )
+      } else if(input$type=="Pack and Label Plan"){
+        textInput("date", label = "Date",
+                  value = 
+                    paste(
+                      as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+4,]),
+                      as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+5,]),
+                      as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+6,]),
+                      sep = "-"
+                    )
+        )
+      }
+    })
+    
+    # vial or kit
+    output$vial_kit = renderUI({
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        selectInput("vial_kit", label = "Vial or Kit?", choices = c("Kit","Vial",""),
+                    selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))==1){
+                      "Vial"
+                    } else{"Kit"}
+        )
+      } else{""}
+    })
+    
+    # put info into df and display
     output$feedback = renderText("")
     
     df2 = reactive({
-      tibble(
-        pdf_name = "0.pdf",
-        protocol = input$trial_number,
-        report_type = input$type,
-        label_spec_id = input$spec_id,
-        pmd_lot_number = input$lot_number,
-        date = input$date,
-        vial_kit = input$vial_kit
-      )
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = input$spec_id,
+          pmd_lot_number = input$lot_number,
+          date = input$date,
+          vial_kit = input$vial_kit
+        )
+      } else if (input$type=="Pack and Label Plan"){
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = input$lot_number,
+          date = input$date,
+          vial_kit = ""
+        )
+      }
     })
     
     df3 = reactive({
-      mutate(df2(), pdf_name=paste(
-        df2()[["protocol"]],"Label Specification Approval",
-        df2()[["label_spec_id"]],df2()[["pmd_lot_number"]],
-        df2()[["vial_kit"]],df2()[["date"]],
-        ".pdf"
-      ))
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Label Specification Approval",
+          df2()[["label_spec_id"]],df2()[["pmd_lot_number"]],
+          df2()[["vial_kit"]],df2()[["date"]],
+          ".pdf"
+        ))
+      } else if (input$type=="Pack and Label Plan"){
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"PL Plan", df2()[["pmd_lot_number"]],
+          df2()[["date"]], ".pdf"
+        ))
+      }
     })
     
     # display the dataframe (will be deleted once live)
     output$test <- renderReactable({
       reactable(df3())
     })
+    
+    
   })
   
-  ###############################################################################
   
-  
+  ### approve ################################################################
   observeEvent(input$approve, {
     output$feedback = renderText("Oh Yeah!")
     
     df2 = reactive({
-      tibble(
-        pdf_name = "0.pdf",
-        protocol = input$trial_number,
-        report_type = input$type,
-        label_spec_id = input$spec_id,
-        pmd_lot_number = input$lot_number,
-        date = input$date,
-        vial_kit = input$vial_kit
-      )
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = input$spec_id,
+          pmd_lot_number = input$lot_number,
+          date = input$date,
+          vial_kit = input$vial_kit
+        )
+      } else if (input$type=="Pack and Label Plan"){
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = input$lot_number,
+          date = input$date,
+          vial_kit = ""
+        )
+      }
     })
     
     df3 = reactive({
-      mutate(df2(), pdf_name=paste(
-        df2()[["protocol"]],"Label Specification Approval",
-        df2()[["label_spec_id"]],df2()[["pmd_lot_number"]],
-        df2()[["vial_kit"]],df2()[["date"]],
-        ".pdf"
-      ))
+      if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Label Specification Approval",
+          df2()[["label_spec_id"]],df2()[["pmd_lot_number"]],
+          df2()[["vial_kit"]],df2()[["date"]],
+          ".pdf"
+        ))
+      } else if (input$type=="Pack and Label Plan"){
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"PL Plan", df2()[["pmd_lot_number"]],
+          df2()[["date"]], ".pdf"
+        ))
+      }
     })
     
     file.rename("0.pdf",
@@ -192,6 +269,7 @@ server <- shinyServer(function(input, output, session) {
   })
   
   
+  ### next pdf ##############################################################
   observeEvent(input$next_pdf, {
     
     if(x()<length(input$file_import$datapath)){
@@ -203,69 +281,167 @@ server <- shinyServer(function(input, output, session) {
         tags$iframe(style="height:1200px; width:100%", src="0.pdf")
       })
       
-      pngfile1 <- pdftools::pdf_convert("0.pdf",dpi = 300)
-      text1 <- tesseract::ocr(pngfile1)
-      df1 = as_tibble(text1)
-      r1 = df1 %>%
-        unnest_tokens(word, value, to_lower = F)
-      
+      ### OCR ###########################################################
+      pngfile1 <- reactive({pdftools::pdf_convert("0.pdf",
+                                                  dpi = 300)})
+      text1 <- reactive({tesseract::ocr(pngfile1())})
+      df1 = reactive({as_tibble(text1())})
+      r1 = reactive({df1() %>%
+          unnest_tokens(word, value, to_lower = F)})
+      ########################################################################
       
       # document type
       updateSelectInput(session, "type", selected = 
-                          if(paste(r1[3,],r1[4,],r1[5,])==
-                             "Label Specification Approval")
-                          {"Label Specification Approval Form (ie variable text approval)"}else{""})
+                          if((which(grepl("\\<LRA\\>", r1()[["word"]]))[1] +1 ==
+                              which(grepl("\\<Spec\\>", r1()[["word"]]))[1]) &
+                             (which(grepl("\\<Spec\\>", r1()[["word"]]))[1] +1 ==
+                              which(grepl("\\<ID\\>", r1()[["word"]]))[1])%in% TRUE)
+                          {"Label Specification Approval Form (ie variable text approval)"}
+                        else if ((which(grepl("\\<P\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<L\\>", r1()[["word"]]))[1]) &
+                                 (which(grepl("\\<L\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<Plan\\>", r1()[["word"]]))[1])%in% TRUE){
+                          "Pack and Label Plan"}
+      )
       
       
       # trial number
-      updateTextInput(session, "trial_number", value = 
-                        as.character(r1[which(grepl("Trial", r1[["word"]]))+2,]))
-      
+      output$trial_number = renderUI({
+        if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+          textInput("trial_number", label = "Trial Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
+        } else if (input$type=="Pack and Label Plan"){
+          textInput("trial_number", label = "Trial Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
+        }
+      })
       
       # spec id
-      updateTextInput(session, "spec_id", value = 
-                        paste(as.character(r1[which(grepl("Spec", r1[["word"]]))[2]+2,]),
-                              "-",
-                              as.character(r1[which(grepl("Spec", r1[["word"]]))[2]+3,]),
-                              sep=""
-                        )
-      )
-      
+      output$spec_id = renderUI({
+        if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+          textInput("spec_id", label = "LRA Spec ID",
+                    value = 
+                      paste(as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+2,]),
+                            "-",
+                            as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+3,]),
+                            sep=""
+                      )
+          )
+        } else{""}
+      })
       
       # lot number
-      updateTextInput(session, "lot_number", value = 
-                        as.character(r1[which(grepl("Lot", r1[["word"]]))+2,])
-      )
-      
+      output$lot_number = renderUI({
+        if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+          textInput("lot_number", label = "PMD Orderable Lot Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+2,])
+          )
+        } else if (input$type=="Pack and Label Plan"){
+          textInput("lot_number", label = "PMD Orderable Lot Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+1,])
+          )
+        }
+      })
       
       # date
-      updateTextInput(session, "date", value = 
-                        paste(as.character(r1[which(grepl("QA", r1[["word"]]))[2]+1,]),
-                              "-",
-                              as.character(r1[which(grepl("QA", r1[["word"]]))[2]+2,]),
-                              "-",
-                              as.character(r1[which(grepl("QA", r1[["word"]]))[2]+3,]),
-                              sep=""
-                        )
-      )
-      
+      output$date = renderUI({
+        if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+          textInput("date", label = "Date",
+                    value = 
+                      paste(as.character(r1()[last(which(grepl("\\<QA\\>", r1()[["word"]])))+1,]),
+                            "-",
+                            as.character(r1()[last(which(grepl("\\<QA\\>", r1()[["word"]])))+2,]),
+                            "-",
+                            as.character(r1()[last(which(grepl("\\<QA\\>", r1()[["word"]])))+3,]),
+                            sep=""
+                      )
+          )
+        } else if(input$type=="Pack and Label Plan"){
+          textInput("date", label = "Date",
+                    value = 
+                      paste(
+                        as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+4,]),
+                        as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+5,]),
+                        as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+6,]),
+                        sep = "-"
+                      )
+          )
+        }
+      })
       
       # vial or kit
-      updateSelectInput(session, "vial_kit", selected = 
-                          if(length(which(grepl("PRIMARY", r1[["word"]])))==1){
-                            "Vial"
-                          } else{"Kit"})
+      output$vial_kit = renderUI({
+        if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+          selectInput("vial_kit", label = "Vial or Kit?", choices = c("Kit","Vial",""),
+                      selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))==1){
+                        "Vial"
+                      } else{"Kit"}
+          )
+        } else{""}
+      })
+      
+      # put info into df and display
+      output$feedback = renderText("")
+      
+      df2 = reactive({
+        if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+          tibble(
+            pdf_name = "0.pdf",
+            protocol = input$trial_number,
+            report_type = input$type,
+            label_spec_id = input$spec_id,
+            pmd_lot_number = input$lot_number,
+            date = input$date,
+            vial_kit = input$vial_kit
+          )
+        } else if (input$type=="Pack and Label Plan"){
+          tibble(
+            pdf_name = "0.pdf",
+            protocol = input$trial_number,
+            report_type = input$type,
+            label_spec_id = "",
+            pmd_lot_number = input$lot_number,
+            date = input$date,
+            vial_kit = ""
+          )
+        }
+      })
+      
+      df3 = reactive({
+        if(input$type=="Label Specification Approval Form (ie variable text approval)"){
+          mutate(df2(), pdf_name=paste(
+            df2()[["protocol"]],"Label Specification Approval",
+            df2()[["label_spec_id"]],df2()[["pmd_lot_number"]],
+            df2()[["vial_kit"]],df2()[["date"]],
+            ".pdf"
+          ))
+        } else if (input$type=="Pack and Label Plan"){
+          mutate(df2(), pdf_name=paste(
+            df2()[["protocol"]],"PL Plan", df2()[["pmd_lot_number"]],
+            df2()[["date"]], ".pdf"
+          ))
+        }
+      })
+      
+      # display the dataframe (will be deleted once live)
+      output$test <- renderReactable({
+        reactable(df3())
+      })
+      
+      
     } else {output$end = renderText("You have reached the last PDF!")}
-
-    
-    
-    
-
-    
- 
     
     
   })
+  
+  
+  
+  
+  
   
   
   
