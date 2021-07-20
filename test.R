@@ -40,7 +40,7 @@ ui <- shinyUI(fluidPage(
 server <- shinyServer(function(input, output, session) {
   
   # table of the imported file
-  output$files <- renderTable({input$file_import})
+  #output$files <- renderTable({input$file_import})
   
   ### display the pdf ########################################################
   x = reactiveVal(1)
@@ -55,9 +55,7 @@ server <- shinyServer(function(input, output, session) {
     })
     
     ### OCR ###########################################################
-    pngfile1 <- reactive({pdftools::pdf_convert("0.pdf",
-                                                dpi = 300)})
-    text1 <- reactive({tesseract::ocr(pngfile1())})
+    text1 <- reactive({pdf_text("0.pdf")})
     df1 = reactive({as_tibble(text1())})
     r1 = reactive({df1() %>%
         unnest_tokens(word, value, to_lower = F)})
@@ -65,11 +63,11 @@ server <- shinyServer(function(input, output, session) {
     
     # document type
     updateSelectInput(session, "type", selected = 
-                        if((which(grepl("\\<LRA\\>", r1()[["word"]]))[1] +1 ==
-                            which(grepl("\\<Spec\\>", r1()[["word"]]))[1]) &
-                           (which(grepl("\\<Spec\\>", r1()[["word"]]))[1] +1 ==
+                        if((which(grepl("\\<Label\\>", r1()[["word"]]))[1] +1 ==
+                            which(grepl("\\<Specification\\>", r1()[["word"]]))[1]) &
+                           (which(grepl("\\<Specification\\>", r1()[["word"]]))[1] +1 ==
                             # %in% TRUE: return FALSE when it's NA
-                            which(grepl("\\<ID\\>", r1()[["word"]]))[1])%in% TRUE)
+                            which(grepl("\\<Approval\\>", r1()[["word"]]))[1])%in% TRUE)
                         {"Label Specification Approval Form (ie variable text approval)"}
                       else if ((which(grepl("\\<P\\>", r1()[["word"]]))[1] +1 ==
                                 which(grepl("\\<L\\>", r1()[["word"]]))[1]) &
@@ -97,9 +95,9 @@ server <- shinyServer(function(input, output, session) {
       if(input$type=="Label Specification Approval Form (ie variable text approval)"){
         textInput("spec_id", label = "LRA Spec ID",
                   value = 
-                    paste(as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+2,]),
+                    paste(as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))[1]+2,]),
                           "-",
-                          as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+3,]),
+                          as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))[1]+3,]),
                           sep=""
                     )
         )
@@ -111,7 +109,8 @@ server <- shinyServer(function(input, output, session) {
       if(input$type=="Label Specification Approval Form (ie variable text approval)"){
         textInput("lot_number", label = "PMD Orderable Lot Number",
                   value = 
-                    as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+2,])
+                    as.character(r1()[which(grepl("^A[0-9]{5}$", r1()[["word"]]))[which(which(grepl("^A[0-9]{5}$", r1()[["word"]]))-15 <last(which(grepl("PMD", r1()$word))) &
+                                                                                        which(grepl("^A[0-9]{5}$", r1()[["word"]]))>last(which(grepl("PMD", r1()$word))))],])
         )
       } else if (input$type=="Pack and Label Plan"){
         textInput("lot_number", label = "PMD Orderable Lot Number",
@@ -138,9 +137,12 @@ server <- shinyServer(function(input, output, session) {
         textInput("date", label = "Date",
                   value = 
                     paste(
-                      as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+4,]),
-                      as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+5,]),
-                      as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+6,]),
+                      as.character(r1()[which(grepl("^[0-9]{2}$", r1()[["word"]]))[which((which(grepl("^[0-9]{2}$", r1()[["word"]])) -7 < which(grepl("Approved", r1()[["word"]]))) &
+                                                                                       (which(grepl("^[0-9]{2}$", r1()[["word"]])) > which(grepl("Approved", r1()[["word"]]))))],]),
+                      as.character(r1()[which(grepl("^[0-9]{2}$", r1()[["word"]]))[which((which(grepl("^[0-9]{2}$", r1()[["word"]])) -7 < which(grepl("Approved", r1()[["word"]]))) &
+                                                                                           (which(grepl("^[0-9]{2}$", r1()[["word"]])) > which(grepl("Approved", r1()[["word"]]))))]+1,]),
+                      as.character(r1()[which(grepl("^[0-9]{2}$", r1()[["word"]]))[which((which(grepl("^[0-9]{2}$", r1()[["word"]])) -7 < which(grepl("Approved", r1()[["word"]]))) &
+                                                                                           (which(grepl("^[0-9]{2}$", r1()[["word"]])) > which(grepl("Approved", r1()[["word"]]))))]+2,]),
                       sep = "-"
                     )
         )
@@ -282,9 +284,7 @@ server <- shinyServer(function(input, output, session) {
       })
       
       ### OCR ###########################################################
-      pngfile1 <- reactive({pdftools::pdf_convert("0.pdf",
-                                                  dpi = 300)})
-      text1 <- reactive({tesseract::ocr(pngfile1())})
+      text1 <- reactive({pdf_text("0.pdf")})
       df1 = reactive({as_tibble(text1())})
       r1 = reactive({df1() %>%
           unnest_tokens(word, value, to_lower = F)})
@@ -292,10 +292,11 @@ server <- shinyServer(function(input, output, session) {
       
       # document type
       updateSelectInput(session, "type", selected = 
-                          if((which(grepl("\\<LRA\\>", r1()[["word"]]))[1] +1 ==
-                              which(grepl("\\<Spec\\>", r1()[["word"]]))[1]) &
-                             (which(grepl("\\<Spec\\>", r1()[["word"]]))[1] +1 ==
-                              which(grepl("\\<ID\\>", r1()[["word"]]))[1])%in% TRUE)
+                          if((which(grepl("\\<Label\\>", r1()[["word"]]))[1] +1 ==
+                              which(grepl("\\<Specification\\>", r1()[["word"]]))[1]) &
+                             (which(grepl("\\<Specification\\>", r1()[["word"]]))[1] +1 ==
+                              # %in% TRUE: return FALSE when it's NA
+                              which(grepl("\\<Approval\\>", r1()[["word"]]))[1])%in% TRUE)
                           {"Label Specification Approval Form (ie variable text approval)"}
                         else if ((which(grepl("\\<P\\>", r1()[["word"]]))[1] +1 ==
                                   which(grepl("\\<L\\>", r1()[["word"]]))[1]) &
@@ -323,9 +324,9 @@ server <- shinyServer(function(input, output, session) {
         if(input$type=="Label Specification Approval Form (ie variable text approval)"){
           textInput("spec_id", label = "LRA Spec ID",
                     value = 
-                      paste(as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+2,]),
+                      paste(as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))[1]+2,]),
                             "-",
-                            as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))+3,]),
+                            as.character(r1()[which(grepl("\\<Spec\\>", r1()[["word"]]))[1]+3,]),
                             sep=""
                       )
           )
@@ -337,7 +338,8 @@ server <- shinyServer(function(input, output, session) {
         if(input$type=="Label Specification Approval Form (ie variable text approval)"){
           textInput("lot_number", label = "PMD Orderable Lot Number",
                     value = 
-                      as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+2,])
+                      as.character(r1()[which(grepl("^A[0-9]{5}$", r1()[["word"]]))[which(which(grepl("^A[0-9]{5}$", r1()[["word"]]))-15 <last(which(grepl("PMD", r1()$word))) &
+                                                                                            which(grepl("^A[0-9]{5}$", r1()[["word"]]))>last(which(grepl("PMD", r1()$word))))],])
           )
         } else if (input$type=="Pack and Label Plan"){
           textInput("lot_number", label = "PMD Orderable Lot Number",
@@ -364,9 +366,12 @@ server <- shinyServer(function(input, output, session) {
           textInput("date", label = "Date",
                     value = 
                       paste(
-                        as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+4,]),
-                        as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+5,]),
-                        as.character(r1()[last(which(grepl("Approved", r1()[["word"]])))+6,]),
+                        as.character(r1()[which(grepl("^[0-9]{2}$", r1()[["word"]]))[which((which(grepl("^[0-9]{2}$", r1()[["word"]])) -7 < which(grepl("Approved", r1()[["word"]]))) &
+                                                                                             (which(grepl("^[0-9]{2}$", r1()[["word"]])) > which(grepl("Approved", r1()[["word"]]))))],]),
+                        as.character(r1()[which(grepl("^[0-9]{2}$", r1()[["word"]]))[which((which(grepl("^[0-9]{2}$", r1()[["word"]])) -7 < which(grepl("Approved", r1()[["word"]]))) &
+                                                                                             (which(grepl("^[0-9]{2}$", r1()[["word"]])) > which(grepl("Approved", r1()[["word"]]))))]+1,]),
+                        as.character(r1()[which(grepl("^[0-9]{2}$", r1()[["word"]]))[which((which(grepl("^[0-9]{2}$", r1()[["word"]])) -7 < which(grepl("Approved", r1()[["word"]]))) &
+                                                                                             (which(grepl("^[0-9]{2}$", r1()[["word"]])) > which(grepl("Approved", r1()[["word"]]))))]+2,]),
                         sep = "-"
                       )
           )
