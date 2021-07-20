@@ -4,11 +4,12 @@ library(pdftools)
 library(tesseract)
 library(tidytext)
 library(reactable)
+library(shinyFeedback)
 
 list1 = read_csv("raw.csv")
 
 ui <- shinyUI(fluidPage(
-  
+  shinyFeedback::useShinyFeedback(),
   titlePanel("Testing File upload"),
   
   sidebarLayout(
@@ -21,9 +22,11 @@ ui <- shinyUI(fluidPage(
                   choices = c(list1[["document_type"]],""),selected = ""),
       uiOutput("trial_number"),
       uiOutput("spec_id"),
+      uiOutput("label_template_id"),
       uiOutput("lot_number"),
-      uiOutput("date"),
+      uiOutput("reg_qa"),
       uiOutput("vial_kit"),
+      uiOutput("date"),
       actionButton("approve","Approve"),
       textOutput("feedback"),
       actionButton("next_pdf","Next PDF"),
@@ -51,14 +54,15 @@ server <- shinyServer(function(input, output, session) {
     file.copy("0.pdf","www", overwrite = T)
     
     output$pdfview <- renderUI({
-      tags$iframe(style="height:1200px; width:100%", src="0.pdf")
+      tags$iframe(style="height:1000px; width:100%", src="0.pdf")
     })
     
-    ### OCR ###########################################################
+    ### pdf_text ###########################################################
     text1 <- reactive({pdf_text("0.pdf")})
     df1 = reactive({as_tibble(text1())})
     r1 = reactive({df1() %>%
         unnest_tokens(word, value, to_lower = F)})
+    
     ########################################################################
     
     # document type
@@ -74,6 +78,12 @@ server <- shinyServer(function(input, output, session) {
                                (which(grepl("\\<L\\>", r1()[["word"]]))[1] +1 ==
                                 which(grepl("\\<Plan\\>", r1()[["word"]]))[1])%in% TRUE){
                         "Pack and Label Plan"}
+                      else if ((which(grepl("\\<Label\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Proof\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<Proof\\>", r1()[["word"]]))[1] +1 ==
+                                # %in% TRUE: return FALSE when it's NA
+                                which(grepl("\\<Request\\>", r1()[["word"]]))[1])%in% TRUE)
+                        {"Label Proof Request"}
     )
     
     
@@ -84,6 +94,10 @@ server <- shinyServer(function(input, output, session) {
                   value = 
                     as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
       } else if (input$type=="Pack and Label Plan"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
+      } else if (input$type=="Label Proof Request"){
         textInput("trial_number", label = "Trial Number",
                   value = 
                     as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
@@ -104,6 +118,16 @@ server <- shinyServer(function(input, output, session) {
       } else{""}
     })
     
+    # label template id
+    output$label_template_id = renderUI({
+      if(input$type=="Label Proof Request"){
+        textInput("label_template_id", label = "Label Template ID",
+                  value = 
+                    gsub(",","",as.character(r1()[which(grepl("\\<LRA\\>", r1()[["word"]]))[1]+3,]))
+        )
+      } else{""}
+    })
+    
     # lot number
     output$lot_number = renderUI({
       if(input$type=="Label Specification Approval Form (ie variable text approval)"){
@@ -118,6 +142,27 @@ server <- shinyServer(function(input, output, session) {
                     as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+1,])
         )
       }
+    })
+    
+    # reg or qa
+    output$reg_qa = renderUI({
+      if(input$type=="Label Proof Request"){
+        
+        ### OCR for last page to extract Transperfect and date #################
+        text2 = reactive({pdf_ocr_text("0.pdf", pages = pdf_length("0.pdf"), dpi=300)})
+        df2 = reactive({as_tibble(text2())})
+        r2 = reactive({df2() %>%
+            unnest_tokens(word, value, to_lower = F)})
+        ########################################################################
+        
+        selectInput("reg_qa", label = "Reg or QA",
+                  choices = c("Reg","QA",""),
+                  selected = if(length(which(grepl("transperfect", r2()[["word"]],
+                                                   ignore.case = T)))>=1){
+                    "Reg"
+                  } else {"QA"}
+        )
+      } else {""}
     })
     
     # date
@@ -146,6 +191,27 @@ server <- shinyServer(function(input, output, session) {
                       sep = "-"
                     )
         )
+      } else if(input$type=="Label Proof Request"){
+        
+        ### OCR for last page to extract Transperfect and date #################
+        text2 = reactive({pdf_ocr_text("0.pdf", pages = pdf_length("0.pdf"), dpi=300)})
+        df2 = reactive({as_tibble(text2())})
+        r2 = reactive({df2() %>%
+            unnest_tokens(word, value, to_lower = F)})
+        ########################################################################
+        
+        textInput("date", label = "Date",
+                  value = if(input$reg_qa=="Reg"){
+                    paste(
+                      if(grepl("^[0-9]{1}$", r2()[last(which(grepl("Signature", r2()[["word"]])))-2,])){
+                        paste(0, r2()[last(which(grepl("Signature", r2()[["word"]])))-2,], sep="")
+                      } else {r2()[last(which(grepl("Signature", r2()[["word"]])))-2,]},
+                      r2()[last(which(grepl("Signature", r2()[["word"]])))-3,],
+                      r2()[last(which(grepl("Signature", r2()[["word"]])))-1,],
+                      sep="-"
+                    )
+                  } else{""} # ask the QA to fill in the date when signing
+        )
       }
     })
     
@@ -153,11 +219,17 @@ server <- shinyServer(function(input, output, session) {
     output$vial_kit = renderUI({
       if(input$type=="Label Specification Approval Form (ie variable text approval)"){
         selectInput("vial_kit", label = "Vial or Kit?", choices = c("Kit","Vial",""),
-                    selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))==1){
+                    selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))>=1){
                       "Vial"
                     } else{"Kit"}
         )
-      } else{""}
+      } else if (input$type=="Label Proof Request"){
+        selectInput("vial_kit", label = "Vial or Kit?", choices = c("Kit","Vial",""),
+                    selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))>=1){
+                      "Vial"
+                    } else{"Kit"}
+        )
+      }
     })
     
     # put info into df and display
@@ -172,7 +244,9 @@ server <- shinyServer(function(input, output, session) {
           label_spec_id = input$spec_id,
           pmd_lot_number = input$lot_number,
           date = input$date,
-          vial_kit = input$vial_kit
+          vial_kit = input$vial_kit,
+          label_template_id = "",
+          reg_qa = ""
         )
       } else if (input$type=="Pack and Label Plan"){
         tibble(
@@ -182,7 +256,21 @@ server <- shinyServer(function(input, output, session) {
           label_spec_id = "",
           pmd_lot_number = input$lot_number,
           date = input$date,
-          vial_kit = ""
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if (input$type=="Label Proof Request"){
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = input$vial_kit,
+          label_template_id = input$label_template_id,
+          reg_qa = input$reg_qa
         )
       }
     })
@@ -198,6 +286,12 @@ server <- shinyServer(function(input, output, session) {
       } else if (input$type=="Pack and Label Plan"){
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"PL Plan", df2()[["pmd_lot_number"]],
+          df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Label Proof Request"){
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Label Proof Request", df2()[["label_template_id"]],
+          paste(df2()[["reg_qa"]], df2()[["vial_kit"]], sep = "_"),
           df2()[["date"]], ".pdf"
         ))
       }
@@ -225,7 +319,9 @@ server <- shinyServer(function(input, output, session) {
           label_spec_id = input$spec_id,
           pmd_lot_number = input$lot_number,
           date = input$date,
-          vial_kit = input$vial_kit
+          vial_kit = input$vial_kit,
+          label_template_id = "",
+          reg_qa = ""
         )
       } else if (input$type=="Pack and Label Plan"){
         tibble(
@@ -235,7 +331,21 @@ server <- shinyServer(function(input, output, session) {
           label_spec_id = "",
           pmd_lot_number = input$lot_number,
           date = input$date,
-          vial_kit = ""
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if (input$type=="Label Proof Request"){
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = input$vial_kit,
+          label_template_id = input$label_template_id,
+          reg_qa = input$reg_qa
         )
       }
     })
@@ -251,6 +361,12 @@ server <- shinyServer(function(input, output, session) {
       } else if (input$type=="Pack and Label Plan"){
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"PL Plan", df2()[["pmd_lot_number"]],
+          df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Label Proof Request"){
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Label Proof Request", df2()[["label_template_id"]],
+          paste(df2()[["reg_qa"]], df2()[["vial_kit"]], sep = "_"),
           df2()[["date"]], ".pdf"
         ))
       }
@@ -280,7 +396,7 @@ server <- shinyServer(function(input, output, session) {
       file.copy("0.pdf","www", overwrite = T)
       
       output$pdfview <- renderUI({
-        tags$iframe(style="height:1200px; width:100%", src="0.pdf")
+        tags$iframe(style="height:1000px; width:100%", src="0.pdf")
       })
       
       ### OCR ###########################################################
@@ -303,6 +419,12 @@ server <- shinyServer(function(input, output, session) {
                                  (which(grepl("\\<L\\>", r1()[["word"]]))[1] +1 ==
                                   which(grepl("\\<Plan\\>", r1()[["word"]]))[1])%in% TRUE){
                           "Pack and Label Plan"}
+                        else if ((which(grepl("\\<Label\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<Proof\\>", r1()[["word"]]))[1]) &
+                                 (which(grepl("\\<Proof\\>", r1()[["word"]]))[1] +1 ==
+                                  # %in% TRUE: return FALSE when it's NA
+                                  which(grepl("\\<Request\\>", r1()[["word"]]))[1])%in% TRUE)
+                        {"Label Proof Request"}
       )
       
       
@@ -313,6 +435,10 @@ server <- shinyServer(function(input, output, session) {
                     value = 
                       as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
         } else if (input$type=="Pack and Label Plan"){
+          textInput("trial_number", label = "Trial Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
+        } else if (input$type=="Label Proof Request"){
           textInput("trial_number", label = "Trial Number",
                     value = 
                       as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
@@ -333,6 +459,16 @@ server <- shinyServer(function(input, output, session) {
         } else{""}
       })
       
+      # label template id
+      output$label_template_id = renderUI({
+        if(input$type=="Label Proof Request"){
+          textInput("label_template_id", label = "Label Template ID",
+                    value = 
+                      gsub(",","",as.character(r1()[which(grepl("\\<LRA\\>", r1()[["word"]]))[1]+3,]))
+          )
+        } else{""}
+      })
+      
       # lot number
       output$lot_number = renderUI({
         if(input$type=="Label Specification Approval Form (ie variable text approval)"){
@@ -347,6 +483,27 @@ server <- shinyServer(function(input, output, session) {
                       as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+1,])
           )
         }
+      })
+      
+      # reg or qa
+      output$reg_qa = renderUI({
+        if(input$type=="Label Proof Request"){
+          
+          ### OCR for last page to extract Transperfect and date #################
+          text2 = reactive({pdf_ocr_text("0.pdf", pages = pdf_length("0.pdf"), dpi=300)})
+          df2 = reactive({as_tibble(text2())})
+          r2 = reactive({df2() %>%
+              unnest_tokens(word, value, to_lower = F)})
+          ########################################################################
+          
+          selectInput("reg_qa", label = "Reg or QA",
+                      choices = c("Reg","QA",""),
+                      selected = if(length(which(grepl("transperfect", r2()[["word"]],
+                                                       ignore.case = T)))>=1){
+                        "Reg"
+                      } else {"QA"}
+          )
+        } else {""}
       })
       
       # date
@@ -375,6 +532,27 @@ server <- shinyServer(function(input, output, session) {
                         sep = "-"
                       )
           )
+        } else if(input$type=="Label Proof Request"){
+          
+          ### OCR for last page to extract Transperfect and date #################
+          text2 = reactive({pdf_ocr_text("0.pdf", pages = pdf_length("0.pdf"), dpi=300)})
+          df2 = reactive({as_tibble(text2())})
+          r2 = reactive({df2() %>%
+              unnest_tokens(word, value, to_lower = F)})
+          ########################################################################
+          
+          textInput("date", label = "Date",
+                    value = if(input$reg_qa=="Reg"){
+                      paste(
+                        if(grepl("^[0-9]{1}$", r2()[last(which(grepl("Signature", r2()[["word"]])))-2,])){
+                          paste(0, r2()[last(which(grepl("Signature", r2()[["word"]])))-2,], sep="")
+                        } else {r2()[last(which(grepl("Signature", r2()[["word"]])))-2,]},
+                        r2()[last(which(grepl("Signature", r2()[["word"]])))-3,],
+                        r2()[last(which(grepl("Signature", r2()[["word"]])))-1,],
+                        sep="-"
+                      )
+                    } else{""} # ask the QA to fill in the date when signing
+          )
         }
       })
       
@@ -382,11 +560,17 @@ server <- shinyServer(function(input, output, session) {
       output$vial_kit = renderUI({
         if(input$type=="Label Specification Approval Form (ie variable text approval)"){
           selectInput("vial_kit", label = "Vial or Kit?", choices = c("Kit","Vial",""),
-                      selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))==1){
+                      selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))>=1){
                         "Vial"
                       } else{"Kit"}
           )
-        } else{""}
+        } else if (input$type=="Label Proof Request"){
+          selectInput("vial_kit", label = "Vial or Kit?", choices = c("Kit","Vial",""),
+                      selected = if(length(which(grepl("PRIMARY", r1()[["word"]])))>=1){
+                        "Vial"
+                      } else{"Kit"}
+          )
+        }
       })
       
       # put info into df and display
@@ -401,7 +585,9 @@ server <- shinyServer(function(input, output, session) {
             label_spec_id = input$spec_id,
             pmd_lot_number = input$lot_number,
             date = input$date,
-            vial_kit = input$vial_kit
+            vial_kit = input$vial_kit,
+            label_template_id = "",
+            reg_qa = ""
           )
         } else if (input$type=="Pack and Label Plan"){
           tibble(
@@ -411,7 +597,21 @@ server <- shinyServer(function(input, output, session) {
             label_spec_id = "",
             pmd_lot_number = input$lot_number,
             date = input$date,
-            vial_kit = ""
+            vial_kit = "",
+            label_template_id = "",
+            reg_qa = ""
+          )
+        } else if (input$type=="Label Proof Request"){
+          tibble(
+            pdf_name = "0.pdf",
+            protocol = input$trial_number,
+            report_type = input$type,
+            label_spec_id = "",
+            pmd_lot_number = "",
+            date = input$date,
+            vial_kit = input$vial_kit,
+            label_template_id = input$label_template_id,
+            reg_qa = input$reg_qa
           )
         }
       })
@@ -427,6 +627,12 @@ server <- shinyServer(function(input, output, session) {
         } else if (input$type=="Pack and Label Plan"){
           mutate(df2(), pdf_name=paste(
             df2()[["protocol"]],"PL Plan", df2()[["pmd_lot_number"]],
+            df2()[["date"]], ".pdf"
+          ))
+        } else if (input$type=="Label Proof Request"){
+          mutate(df2(), pdf_name=paste(
+            df2()[["protocol"]],"Label Proof Request", df2()[["label_template_id"]],
+            paste(df2()[["reg_qa"]], df2()[["vial_kit"]], sep = "_"),
             df2()[["date"]], ".pdf"
           ))
         }
