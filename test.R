@@ -45,7 +45,20 @@ ui <- shinyUI(fluidPage(
                actionButton("report_issues","Report Issues")
         )
       ),
-      textOutput("end"),
+      fluidRow(
+        column(2,
+               textOutput("end")
+        ),
+        column(2,
+               ""
+        ),
+        column(4,
+               ""
+        ),
+        column(2,
+               textOutput("report_feedback")
+        )
+      ),
       h5(tags$b("PDF Name")),
       verbatimTextOutput("name_table")
     ),
@@ -64,8 +77,7 @@ server <- shinyServer(function(input, output, session) {
   
   ### issues log #############################################################
   observeEvent(input$report_issues,{
-    disable("approve")
-    enable("next_pdf")
+    output$report_feedback = renderText("Thanks!")
     file.copy("0.pdf", file.path("issues", paste0(gsub("[[:punct:]]", " ",
                                                        Sys.time()), ".pdf")))
   })
@@ -75,6 +87,7 @@ server <- shinyServer(function(input, output, session) {
   
   observeEvent(input$file_import,{
     enable("ocr_button")
+    output$report_feedback = renderText("")
     
     file.rename(input$file_import$datapath[x()], "0.pdf")
     file.copy("0.pdf","www", overwrite = T)
@@ -391,7 +404,7 @@ server <- shinyServer(function(input, output, session) {
   observeEvent(input$approve, {
     disable("approve")
     enable("next_pdf")
-    disable("report_issues")
+    output$report_feedback = renderText("")
     
     df2 = reactive({
       if(input$type=="Label Specification Approval Form (ie variable text approval)"){
@@ -472,10 +485,7 @@ server <- shinyServer(function(input, output, session) {
       }
     })
     
-    file.rename("0.pdf",
-                df3()[["pdf_name"]]
-    )
-    file.copy(df3()[["pdf_name"]], "final")
+    file.copy("0.pdf", file.path("final", df3()[["pdf_name"]]))
     
     # append to csv
     write.table(df3(),"test.csv", append = T, col.names = F, row.names = F ,
@@ -491,7 +501,7 @@ server <- shinyServer(function(input, output, session) {
   observeEvent(input$next_pdf, {
     enable("approve")
     disable("next_pdf")
-    enable("report_issues")
+    output$report_feedback = renderText("")
     
     if(x()<length(input$file_import$datapath)){
       x(x()+1)
