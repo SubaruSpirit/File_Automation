@@ -93,7 +93,7 @@ server <- shinyServer(function(input, output, session) {
     file.copy("0.pdf","www", overwrite = T)
     
     output$pdfview <- renderUI({
-      tags$iframe(style="height:1000px; width:100%", src="0.pdf")
+      tags$iframe(style="height:1200px; width:100%", src="0.pdf")
     })
     
     ### pdf_text ###########################################################
@@ -132,6 +132,20 @@ server <- shinyServer(function(input, output, session) {
                                 which(grepl("\\<SHEET\\>", r1()[["word"]]))[1]) %in% TRUE) {
                         "Label Proof"
                       }
+                      else if ((which(grepl("\\<LINKS\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<REPORT\\>", r1()[["word"]]))[1]) %in% TRUE){
+                        "Links Report"
+                      }
+                      else if ((which(grepl("\\<RANDOMIZATION\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<REPORT\\>", r1()[["word"]]))[1]) %in% TRUE){
+                        "Randomization Report"
+                      }
+                      else if ((which(grepl("\\<Kit\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<List\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<List\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Specification\\>", r1()[["word"]]))[1])%in% TRUE){
+                        "Medication Kit List Specification"
+                      }
     )
     
     
@@ -150,6 +164,18 @@ server <- shinyServer(function(input, output, session) {
                   value = 
                     as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
       } else if (input$type=="Label Proof"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="Links Report"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="Randomization Report"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="Medication Kit List Specification"){
         textInput("trial_number", label = "Trial Number",
                   value = 
                     as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
@@ -198,27 +224,22 @@ server <- shinyServer(function(input, output, session) {
                   value = 
                     as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+1,])
         )
-      }
+      } else if (input$type=="Links Report"){
+        textInput("lot_number", label = "PMD Orderable Lot Number",
+                  value = 
+                    paste(unique(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))+2,
+                                    ])[["word"]], collapse = " ")
+        )
+      } 
     })
     
     # reg or qa
     output$reg_qa = renderUI({
       if(input$type=="Label Proof Request"){
         
-        ### OCR for last page to extract Transperfect and date #################
-        text2 = reactive({pdf_ocr_text("0.pdf", pages = pdf_length("0.pdf"), dpi=300)})
-        df2 = reactive({as_tibble(text2())})
-        r2 = reactive({df2() %>%
-            unnest_tokens(word, value, to_lower = F)})
-        ########################################################################
-        
         selectInput("reg_qa", label = "Reg or QA",
                   choices = c("Reg","QA",""),
-                  selected = if(length(which(grepl("transperfect", r2()[["word"]],
-                                                   ignore.case = T)))>=1){
-                    "Reg"
-                  } else {"QA"}
-        )
+                  selected = "Reg")
       } else {""}
     })
     
@@ -258,7 +279,8 @@ server <- shinyServer(function(input, output, session) {
         ########################################################################
         
         textInput("date", label = "Date",
-                  value = if(input$reg_qa=="Reg"){
+                  value = if(length(which(grepl("transperfect", r2()[["word"]],
+                                                 ignore.case = T)))>=1){
                     paste(
                       if(grepl("^[0-9]{1}$", r2()[last(which(grepl("Signature", r2()[["word"]])))-2,])){
                         paste(0, r2()[last(which(grepl("Signature", r2()[["word"]])))-2,], sep="")
@@ -278,6 +300,36 @@ server <- shinyServer(function(input, output, session) {
                       as.character(r1()[which(grepl("CUSTOMER", r1()[["word"]]))+4,]),
                       sep="-"
                     )
+        )
+      } else if(input$type=="Links Report"){
+        textInput("date", label = "Date",
+                  value = paste(
+                    r1()[which(r1()[["word"]] %in% month.abb)[4]-1,],
+                    r1()[which(r1()[["word"]] %in% month.abb)[4],],
+                    r1()[which(r1()[["word"]] %in% month.abb)[4]+1,],
+                    sep="-"
+                  )
+                    
+        )
+      } else if(input$type=="Randomization Report"){
+        textInput("date", label = "Date",
+                  value = paste(
+                    r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4]-1,],
+                    r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4],],
+                    r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4]+1,],
+                    sep="-"
+                  )
+                  
+        )
+      } else if(input$type=="Medication Kit List Specification"){
+        textInput("date", label = "Date",
+                  value = paste(
+                    r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec")))-1,],
+                    r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))),],
+                    r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec")))+1,],
+                    sep="-"
+                  )
+                  
         )
       }
     })
@@ -357,6 +409,42 @@ server <- shinyServer(function(input, output, session) {
           label_template_id = input$label_template_id,
           reg_qa = ""
         )
+      } else if(input$type=="Links Report") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = input$lot_number,
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if(input$type=="Randomization Report") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if(input$type=="Medication Kit List Specification") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
       }
     })
     
@@ -383,6 +471,19 @@ server <- shinyServer(function(input, output, session) {
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"Label Proof", df2()[["label_template_id"]],
           df2()[["vial_kit"]],df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Links Report") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Links Report", df2()[["pmd_lot_number"]],
+          df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Randomization Report") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Sub Rand", df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Medication Kit List Specification") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
         ))
       }
     })
@@ -455,6 +556,42 @@ server <- shinyServer(function(input, output, session) {
           label_template_id = input$label_template_id,
           reg_qa = ""
         )
+      } else if(input$type=="Links Report") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = input$lot_number,
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if(input$type=="Randomization Report") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if(input$type=="Medication Kit List Specification") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
       }
     })
     
@@ -481,6 +618,19 @@ server <- shinyServer(function(input, output, session) {
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"Label Proof", df2()[["label_template_id"]],
           df2()[["vial_kit"]],df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Links Report") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Links Report", df2()[["pmd_lot_number"]],
+          df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Randomization Report") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Sub Rand", df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Medication Kit List Specification") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
         ))
       }
     })
@@ -509,7 +659,7 @@ server <- shinyServer(function(input, output, session) {
       file.copy("0.pdf","www", overwrite = T)
       
       output$pdfview <- renderUI({
-        tags$iframe(style="height:1000px; width:100%", src="0.pdf")
+        tags$iframe(style="height:1200px; width:100%", src="0.pdf")
       })
       
       ### OCR ###########################################################
@@ -547,6 +697,20 @@ server <- shinyServer(function(input, output, session) {
                                   which(grepl("\\<SHEET\\>", r1()[["word"]]))[1]) %in% TRUE) {
                           "Label Proof"
                         }
+                        else if ((which(grepl("\\<LINKS\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<REPORT\\>", r1()[["word"]]))[1]) %in% TRUE){
+                          "Links Report"
+                        }
+                        else if ((which(grepl("\\<RANDOMIZATION\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<REPORT\\>", r1()[["word"]]))[1]) %in% TRUE){
+                          "Randomization Report"
+                        }
+                        else if ((which(grepl("\\<Kit\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<List\\>", r1()[["word"]]))[1]) &
+                                 (which(grepl("\\<List\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<Specification\\>", r1()[["word"]]))[1])%in% TRUE){
+                          "Medication Kit List Specification"
+                        }
       )
       
       
@@ -565,6 +729,18 @@ server <- shinyServer(function(input, output, session) {
                     value = 
                       as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
         } else if (input$type=="Label Proof"){
+          textInput("trial_number", label = "Trial Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+        } else if (input$type=="Links Report"){
+          textInput("trial_number", label = "Trial Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+        } else if (input$type=="Randomization Report"){
+          textInput("trial_number", label = "Trial Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+        } else if (input$type=="Medication Kit List Specification"){
           textInput("trial_number", label = "Trial Number",
                     value = 
                       as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
@@ -613,27 +789,22 @@ server <- shinyServer(function(input, output, session) {
                     value = 
                       as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+1,])
           )
-        }
+        } else if (input$type=="Links Report"){
+          textInput("lot_number", label = "PMD Orderable Lot Number",
+                    value = 
+                      paste(unique(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))+2,
+                      ])[["word"]], collapse = " ")
+          )
+        } 
       })
       
       # reg or qa
       output$reg_qa = renderUI({
         if(input$type=="Label Proof Request"){
           
-          ### OCR for last page to extract Transperfect and date #################
-          text2 = reactive({pdf_ocr_text("0.pdf", pages = pdf_length("0.pdf"), dpi=300)})
-          df2 = reactive({as_tibble(text2())})
-          r2 = reactive({df2() %>%
-              unnest_tokens(word, value, to_lower = F)})
-          ########################################################################
-          
           selectInput("reg_qa", label = "Reg or QA",
                       choices = c("Reg","QA",""),
-                      selected = if(length(which(grepl("transperfect", r2()[["word"]],
-                                                       ignore.case = T)))>=1){
-                        "Reg"
-                      } else {"QA"}
-          )
+                      selected = "Reg")
         } else {""}
       })
       
@@ -673,7 +844,8 @@ server <- shinyServer(function(input, output, session) {
           ########################################################################
           
           textInput("date", label = "Date",
-                    value = if(input$reg_qa=="Reg"){
+                    value = if(length(which(grepl("transperfect", r2()[["word"]],
+                                                  ignore.case = T)))>=1){
                       paste(
                         if(grepl("^[0-9]{1}$", r2()[last(which(grepl("Signature", r2()[["word"]])))-2,])){
                           paste(0, r2()[last(which(grepl("Signature", r2()[["word"]])))-2,], sep="")
@@ -693,6 +865,36 @@ server <- shinyServer(function(input, output, session) {
                         as.character(r1()[which(grepl("CUSTOMER", r1()[["word"]]))+4,]),
                         sep="-"
                       )
+          )
+        } else if(input$type=="Links Report"){
+          textInput("date", label = "Date",
+                    value = paste(
+                      r1()[which(r1()[["word"]] %in% month.abb)[4]-1,],
+                      r1()[which(r1()[["word"]] %in% month.abb)[4],],
+                      r1()[which(r1()[["word"]] %in% month.abb)[4]+1,],
+                      sep="-"
+                    )
+                    
+          )
+        } else if(input$type=="Randomization Report"){
+          textInput("date", label = "Date",
+                    value = paste(
+                      r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4]-1,],
+                      r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4],],
+                      r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4]+1,],
+                      sep="-"
+                    )
+                    
+          )
+        } else if(input$type=="Medication Kit List Specification"){
+          textInput("date", label = "Date",
+                    value = paste(
+                      r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec")))-1,],
+                      r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))),],
+                      r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec")))+1,],
+                      sep="-"
+                    )
+                    
           )
         }
       })
@@ -772,6 +974,42 @@ server <- shinyServer(function(input, output, session) {
             label_template_id = input$label_template_id,
             reg_qa = ""
           )
+        } else if(input$type=="Links Report") {
+          tibble(
+            pdf_name = "0.pdf",
+            protocol = input$trial_number,
+            report_type = input$type,
+            label_spec_id = "",
+            pmd_lot_number = input$lot_number,
+            date = input$date,
+            vial_kit = "",
+            label_template_id = "",
+            reg_qa = ""
+          )
+        } else if(input$type=="Randomization Report") {
+          tibble(
+            pdf_name = "0.pdf",
+            protocol = input$trial_number,
+            report_type = input$type,
+            label_spec_id = "",
+            pmd_lot_number = "",
+            date = input$date,
+            vial_kit = "",
+            label_template_id = "",
+            reg_qa = ""
+          )
+        } else if(input$type=="Medication Kit List Specification") {
+          tibble(
+            pdf_name = "0.pdf",
+            protocol = input$trial_number,
+            report_type = input$type,
+            label_spec_id = "",
+            pmd_lot_number = "",
+            date = input$date,
+            vial_kit = "",
+            label_template_id = "",
+            reg_qa = ""
+          )
         }
       })
       
@@ -798,6 +1036,19 @@ server <- shinyServer(function(input, output, session) {
           mutate(df2(), pdf_name=paste(
             df2()[["protocol"]],"Label Proof", df2()[["label_template_id"]],
             df2()[["vial_kit"]],df2()[["date"]], ".pdf"
+          ))
+        } else if (input$type=="Links Report") {
+          mutate(df2(), pdf_name=paste(
+            df2()[["protocol"]],"Links Report", df2()[["pmd_lot_number"]],
+            df2()[["date"]], ".pdf"
+          ))
+        } else if (input$type=="Randomization Report") {
+          mutate(df2(), pdf_name=paste(
+            df2()[["protocol"]],"Sub Rand", df2()[["date"]], ".pdf"
+          ))
+        } else if (input$type=="Medication Kit List Specification") {
+          mutate(df2(), pdf_name=paste(
+            df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
           ))
         }
       })
@@ -856,6 +1107,20 @@ server <- shinyServer(function(input, output, session) {
                                 which(grepl("\\<SHEET\\>", r1()[["word"]]))[1]) %in% TRUE) {
                         "Label Proof"
                       }
+                      else if ((which(grepl("\\<LINKS\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<REPORT\\>", r1()[["word"]]))[1]) %in% TRUE){
+                        "Links Report"
+                      }
+                      else if ((which(grepl("\\<RANDOMIZATION\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<REPORT\\>", r1()[["word"]]))[1]) %in% TRUE){
+                        "Randomization Report"
+                      }
+                      else if ((which(grepl("\\<Kit\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<List\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<List\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Specification\\>", r1()[["word"]]))[1])%in% TRUE){
+                        "Medication Kit List Specification"
+                      }
     )
     
     
@@ -874,6 +1139,18 @@ server <- shinyServer(function(input, output, session) {
                   value = 
                     as.character(r1()[which(grepl("\\<Trial\\>", r1()[["word"]]))[1]+2,]))
       } else if (input$type=="Label Proof"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="Links Report"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="Randomization Report"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="Medication Kit List Specification"){
         textInput("trial_number", label = "Trial Number",
                   value = 
                     as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
@@ -922,27 +1199,22 @@ server <- shinyServer(function(input, output, session) {
                   value = 
                     as.character(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))[1]+1,])
         )
-      }
+      } else if (input$type=="Links Report"){
+        textInput("lot_number", label = "PMD Orderable Lot Number",
+                  value = 
+                    paste(unique(r1()[which(grepl("\\<Lot\\>", r1()[["word"]]))+2,
+                    ])[["word"]], collapse = " ")
+        )
+      } 
     })
     
     # reg or qa
     output$reg_qa = renderUI({
       if(input$type=="Label Proof Request"){
         
-        ### OCR for last page to extract Transperfect and date #################
-        text2 = reactive({pdf_ocr_text("0.pdf", pages = pdf_length("0.pdf"), dpi=300)})
-        df2 = reactive({as_tibble(text2())})
-        r2 = reactive({df2() %>%
-            unnest_tokens(word, value, to_lower = F)})
-        ########################################################################
-        
         selectInput("reg_qa", label = "Reg or QA",
                     choices = c("Reg","QA",""),
-                    selected = if(length(which(grepl("transperfect", r2()[["word"]],
-                                                     ignore.case = T)))>=1){
-                      "Reg"
-                    } else {"QA"}
-        )
+                    selected = "Reg")
       } else {""}
     })
     
@@ -982,7 +1254,8 @@ server <- shinyServer(function(input, output, session) {
         ########################################################################
         
         textInput("date", label = "Date",
-                  value = if(input$reg_qa=="Reg"){
+                  value = if(length(which(grepl("transperfect", r2()[["word"]],
+                                                ignore.case = T)))>=1){
                     paste(
                       if(grepl("^[0-9]{1}$", r2()[last(which(grepl("Signature", r2()[["word"]])))-2,])){
                         paste(0, r2()[last(which(grepl("Signature", r2()[["word"]])))-2,], sep="")
@@ -1002,6 +1275,36 @@ server <- shinyServer(function(input, output, session) {
                       as.character(r1()[which(grepl("CUSTOMER", r1()[["word"]]))+4,]),
                       sep="-"
                     )
+        )
+      } else if(input$type=="Links Report"){
+        textInput("date", label = "Date",
+                  value = paste(
+                    r1()[which(r1()[["word"]] %in% month.abb)[4]-1,],
+                    r1()[which(r1()[["word"]] %in% month.abb)[4],],
+                    r1()[which(r1()[["word"]] %in% month.abb)[4]+1,],
+                    sep="-"
+                  )
+                  
+        )
+      } else if(input$type=="Randomization Report"){
+        textInput("date", label = "Date",
+                  value = paste(
+                    r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4]-1,],
+                    r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4],],
+                    r1()[which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))[4]+1,],
+                    sep="-"
+                  )
+                  
+        )
+      } else if(input$type=="Medication Kit List Specification"){
+        textInput("date", label = "Date",
+                  value = paste(
+                    r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec")))-1,],
+                    r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"))),],
+                    r1()[last(which(r1()[["word"]] %in% c("Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec")))+1,],
+                    sep="-"
+                  )
+                  
         )
       }
     })
@@ -1081,6 +1384,42 @@ server <- shinyServer(function(input, output, session) {
           label_template_id = input$label_template_id,
           reg_qa = ""
         )
+      } else if(input$type=="Links Report") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = input$lot_number,
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if(input$type=="Randomization Report") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
+      } else if(input$type=="Medication Kit List Specification") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = input$date,
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = ""
+        )
       }
     })
     
@@ -1107,6 +1446,19 @@ server <- shinyServer(function(input, output, session) {
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"Label Proof", df2()[["label_template_id"]],
           df2()[["vial_kit"]],df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Links Report") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Links Report", df2()[["pmd_lot_number"]],
+          df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Randomization Report") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Sub Rand", df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="Medication Kit List Specification") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
         ))
       }
     })
