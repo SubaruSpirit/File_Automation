@@ -6,11 +6,13 @@ library(tidytext)
 library(reactable)
 library(shinyFeedback)
 library(shinyjs)
+library(shinyalert)
 
 list1 = read_csv("raw.csv")
 
 ui <- shinyUI(fluidPage(
   useShinyjs(),
+  useShinyalert(),
   shinyFeedback::useShinyFeedback(),
   titlePanel("Testing File upload"),
   
@@ -60,7 +62,8 @@ ui <- shinyUI(fluidPage(
         )
       ),
       h5(tags$b("PDF Name")),
-      verbatimTextOutput("name_table")
+      verbatimTextOutput("name_table"),
+      actionButton("reject_button","Reject")
     ),
     
     mainPanel(
@@ -82,11 +85,27 @@ server <- shinyServer(function(input, output, session) {
                                                        Sys.time()), ".pdf")))
   })
   
+  ### reject #############################################################
+  secret = reactiveVal()
+  observeEvent(input$reject_button,{
+    enable("next_pdf")
+    disable("approve")
+    disable("reject_button")
+    file.copy("0.pdf", file.path("rejected", paste0(gsub("[[:punct:]]", " ",
+                                                       Sys.time()), ".pdf")))
+    
+    if(secret()){
+      shinyalert("Alert!", "You have already approved this document,
+                 write down the pdf name and delete it from the final folder.", type = "error")
+    } else {}
+  })
+  
   ### display the pdf ########################################################
   x = reactiveVal(1)
   
   observeEvent(input$file_import,{
     enable("ocr_button")
+    secret(FALSE)
     output$report_feedback = renderText("")
     
     file.rename(input$file_import$datapath[x()], "0.pdf")
@@ -505,6 +524,8 @@ server <- shinyServer(function(input, output, session) {
   observeEvent(input$approve, {
     disable("approve")
     enable("next_pdf")
+    enable("reject_button")
+    secret(TRUE)
     output$report_feedback = renderText("")
     
     df2 = reactive({
@@ -651,6 +672,8 @@ server <- shinyServer(function(input, output, session) {
   observeEvent(input$next_pdf, {
     enable("approve")
     disable("next_pdf")
+    enable("reject_button")
+    secret(FALSE)
     output$report_feedback = renderText("")
     
     if(x()<length(input$file_import$datapath)){
