@@ -14,7 +14,7 @@ ui <- shinyUI(fluidPage(
   useShinyjs(),
   useShinyalert(),
   shinyFeedback::useShinyFeedback(),
-  titlePanel("Testing File upload"),
+  titlePanel("PDF Automation App"),
   
   sidebarLayout(
     sidebarPanel(
@@ -33,6 +33,7 @@ ui <- shinyUI(fluidPage(
       uiOutput("reg_qa"),
       uiOutput("vial_kit"),
       uiOutput("date"),
+      uiOutput("version"),
       fluidRow(
         column(2,
                actionButton("approve","Approve")
@@ -165,6 +166,14 @@ server <- shinyServer(function(input, output, session) {
                                 which(grepl("\\<Specification\\>", r1()[["word"]]))[1])%in% TRUE){
                         "Medication Kit List Specification"
                       }
+                      else if ((which(grepl("\\<Investigational\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Medicinal\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<Medicinal\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Product\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<Product\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Manual\\>", r1()[["word"]]))[1])%in% TRUE) {
+                        "IMP Manual and Approval Form"
+                      }
     )
     
     
@@ -198,6 +207,11 @@ server <- shinyServer(function(input, output, session) {
         textInput("trial_number", label = "Trial Number",
                   value = 
                     as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="IMP Manual and Approval Form"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+2,])
+                  )
       }
     })
     
@@ -225,7 +239,7 @@ server <- shinyServer(function(input, output, session) {
       } else if(input$type=="Label Proof"){
         textInput("label_template_id", label = "Label Template ID",
                   value = 
-                    as.character(r1()[which(grepl("Client", r1()[["word"]]))[1]+2,])
+                    as.character(r1()[which(grepl("Label", r1()[["word"]]))[1]+2,])
         )
       }
     })
@@ -377,6 +391,23 @@ server <- shinyServer(function(input, output, session) {
       
     })
     
+    # version
+    output$version = renderUI({
+      if(input$type=="IMP Manual and Approval Form"){
+        textInput("version", label = "Version",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Version\\>",
+                                                  r1()[["word"]]))[1]+1,])
+                  
+        )
+      }
+      
+    })
+    
+    
+    
+    
+    
     # put info into df and display
     
     df2 = reactive({
@@ -390,7 +421,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if (input$type=="Pack and Label Plan"){
         tibble(
@@ -402,7 +434,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if (input$type=="Label Proof Request"){
         tibble(
@@ -414,7 +447,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = input$label_template_id,
-          reg_qa = input$reg_qa
+          reg_qa = input$reg_qa,
+          version = ""
         )
       } else if(input$type=="Label Proof") {
         tibble(
@@ -426,7 +460,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = input$label_template_id,
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Links Report") {
         tibble(
@@ -438,7 +473,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Randomization Report") {
         tibble(
@@ -450,7 +486,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Medication Kit List Specification") {
         tibble(
@@ -462,7 +499,21 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
+        )
+      } else if(input$type=="IMP Manual and Approval Form") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = "",
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = "",
+          version = input$version
         )
       }
     })
@@ -503,6 +554,10 @@ server <- shinyServer(function(input, output, session) {
       } else if (input$type=="Medication Kit List Specification") {
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="IMP Manual and Approval Form") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"IP Manual Version", df2()[["version"]], ".pdf"
         ))
       }
     })
@@ -539,7 +594,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if (input$type=="Pack and Label Plan"){
         tibble(
@@ -551,7 +607,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if (input$type=="Label Proof Request"){
         tibble(
@@ -563,7 +620,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = input$label_template_id,
-          reg_qa = input$reg_qa
+          reg_qa = input$reg_qa,
+          version = ""
         )
       } else if(input$type=="Label Proof") {
         tibble(
@@ -575,7 +633,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = input$label_template_id,
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Links Report") {
         tibble(
@@ -587,7 +646,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Randomization Report") {
         tibble(
@@ -599,7 +659,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Medication Kit List Specification") {
         tibble(
@@ -611,7 +672,21 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
+        )
+      } else if(input$type=="IMP Manual and Approval Form") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = "",
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = "",
+          version = input$version
         )
       }
     })
@@ -652,6 +727,10 @@ server <- shinyServer(function(input, output, session) {
       } else if (input$type=="Medication Kit List Specification") {
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="IMP Manual and Approval Form") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"IP Manual Version", df2()[["version"]], ".pdf"
         ))
       }
     })
@@ -734,6 +813,14 @@ server <- shinyServer(function(input, output, session) {
                                   which(grepl("\\<Specification\\>", r1()[["word"]]))[1])%in% TRUE){
                           "Medication Kit List Specification"
                         }
+                        else if ((which(grepl("\\<Investigational\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<Medicinal\\>", r1()[["word"]]))[1]) &
+                                 (which(grepl("\\<Medicinal\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<Product\\>", r1()[["word"]]))[1]) &
+                                 (which(grepl("\\<Product\\>", r1()[["word"]]))[1] +1 ==
+                                  which(grepl("\\<Manual\\>", r1()[["word"]]))[1])%in% TRUE) {
+                          "IMP Manual and Approval Form"
+                        }
       )
       
       
@@ -767,6 +854,11 @@ server <- shinyServer(function(input, output, session) {
           textInput("trial_number", label = "Trial Number",
                     value = 
                       as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+        } else if (input$type=="IMP Manual and Approval Form"){
+          textInput("trial_number", label = "Trial Number",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+2,])
+          )
         }
       })
       
@@ -794,7 +886,7 @@ server <- shinyServer(function(input, output, session) {
         } else if(input$type=="Label Proof"){
           textInput("label_template_id", label = "Label Template ID",
                     value = 
-                      as.character(r1()[which(grepl("Client", r1()[["word"]]))[1]+2,])
+                      as.character(r1()[which(grepl("Label", r1()[["word"]]))[1]+2,])
           )
         }
       })
@@ -946,6 +1038,23 @@ server <- shinyServer(function(input, output, session) {
         
       })
       
+      # version
+      output$version = renderUI({
+        if(input$type=="IMP Manual and Approval Form"){
+          textInput("version", label = "Version",
+                    value = 
+                      as.character(r1()[which(grepl("\\<Version\\>",
+                                                    r1()[["word"]]))[1]+1,])
+                    
+          )
+        }
+        
+      })
+      
+      
+      
+      
+      
       # put info into df and display
       
       df2 = reactive({
@@ -959,7 +1068,8 @@ server <- shinyServer(function(input, output, session) {
             date = input$date,
             vial_kit = input$vial_kit,
             label_template_id = "",
-            reg_qa = ""
+            reg_qa = "",
+            version = ""
           )
         } else if (input$type=="Pack and Label Plan"){
           tibble(
@@ -971,7 +1081,8 @@ server <- shinyServer(function(input, output, session) {
             date = input$date,
             vial_kit = "",
             label_template_id = "",
-            reg_qa = ""
+            reg_qa = "",
+            version = ""
           )
         } else if (input$type=="Label Proof Request"){
           tibble(
@@ -983,7 +1094,8 @@ server <- shinyServer(function(input, output, session) {
             date = input$date,
             vial_kit = input$vial_kit,
             label_template_id = input$label_template_id,
-            reg_qa = input$reg_qa
+            reg_qa = input$reg_qa,
+            version = ""
           )
         } else if(input$type=="Label Proof") {
           tibble(
@@ -995,7 +1107,8 @@ server <- shinyServer(function(input, output, session) {
             date = input$date,
             vial_kit = input$vial_kit,
             label_template_id = input$label_template_id,
-            reg_qa = ""
+            reg_qa = "",
+            version = ""
           )
         } else if(input$type=="Links Report") {
           tibble(
@@ -1007,7 +1120,8 @@ server <- shinyServer(function(input, output, session) {
             date = input$date,
             vial_kit = "",
             label_template_id = "",
-            reg_qa = ""
+            reg_qa = "",
+            version = ""
           )
         } else if(input$type=="Randomization Report") {
           tibble(
@@ -1019,7 +1133,8 @@ server <- shinyServer(function(input, output, session) {
             date = input$date,
             vial_kit = "",
             label_template_id = "",
-            reg_qa = ""
+            reg_qa = "",
+            version = ""
           )
         } else if(input$type=="Medication Kit List Specification") {
           tibble(
@@ -1031,7 +1146,21 @@ server <- shinyServer(function(input, output, session) {
             date = input$date,
             vial_kit = "",
             label_template_id = "",
-            reg_qa = ""
+            reg_qa = "",
+            version = ""
+          )
+        } else if(input$type=="IMP Manual and Approval Form") {
+          tibble(
+            pdf_name = "0.pdf",
+            protocol = input$trial_number,
+            report_type = input$type,
+            label_spec_id = "",
+            pmd_lot_number = "",
+            date = "",
+            vial_kit = "",
+            label_template_id = "",
+            reg_qa = "",
+            version = input$version
           )
         }
       })
@@ -1072,6 +1201,10 @@ server <- shinyServer(function(input, output, session) {
         } else if (input$type=="Medication Kit List Specification") {
           mutate(df2(), pdf_name=paste(
             df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
+          ))
+        } else if (input$type=="IMP Manual and Approval Form") {
+          mutate(df2(), pdf_name=paste(
+            df2()[["protocol"]],"IP Manual Version", df2()[["version"]], ".pdf"
           ))
         }
       })
@@ -1144,6 +1277,14 @@ server <- shinyServer(function(input, output, session) {
                                 which(grepl("\\<Specification\\>", r1()[["word"]]))[1])%in% TRUE){
                         "Medication Kit List Specification"
                       }
+                      else if ((which(grepl("\\<Investigational\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Medicinal\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<Medicinal\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Product\\>", r1()[["word"]]))[1]) &
+                               (which(grepl("\\<Product\\>", r1()[["word"]]))[1] +1 ==
+                                which(grepl("\\<Manual\\>", r1()[["word"]]))[1])%in% TRUE) {
+                        "IMP Manual and Approval Form"
+                      }
     )
     
     
@@ -1177,6 +1318,11 @@ server <- shinyServer(function(input, output, session) {
         textInput("trial_number", label = "Trial Number",
                   value = 
                     as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+1,]))
+      } else if (input$type=="IMP Manual and Approval Form"){
+        textInput("trial_number", label = "Trial Number",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Protocol\\>", r1()[["word"]]))[1]+2,])
+        )
       }
     })
     
@@ -1204,7 +1350,7 @@ server <- shinyServer(function(input, output, session) {
       } else if(input$type=="Label Proof"){
         textInput("label_template_id", label = "Label Template ID",
                   value = 
-                    as.character(r1()[which(grepl("Client", r1()[["word"]]))[1]+2,])
+                    as.character(r1()[which(grepl("Label", r1()[["word"]]))[1]+2,])
         )
       }
     })
@@ -1356,6 +1502,23 @@ server <- shinyServer(function(input, output, session) {
       
     })
     
+    # version
+    output$version = renderUI({
+      if(input$type=="IMP Manual and Approval Form"){
+        textInput("version", label = "Version",
+                  value = 
+                    as.character(r1()[which(grepl("\\<Version\\>",
+                                                  r1()[["word"]]))[1]+1,])
+                  
+        )
+      }
+      
+    })
+    
+    
+    
+    
+    
     # put info into df and display
     
     df2 = reactive({
@@ -1369,7 +1532,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if (input$type=="Pack and Label Plan"){
         tibble(
@@ -1381,7 +1545,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if (input$type=="Label Proof Request"){
         tibble(
@@ -1393,7 +1558,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = input$label_template_id,
-          reg_qa = input$reg_qa
+          reg_qa = input$reg_qa,
+          version = ""
         )
       } else if(input$type=="Label Proof") {
         tibble(
@@ -1405,7 +1571,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = input$vial_kit,
           label_template_id = input$label_template_id,
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Links Report") {
         tibble(
@@ -1417,7 +1584,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Randomization Report") {
         tibble(
@@ -1429,7 +1597,8 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
         )
       } else if(input$type=="Medication Kit List Specification") {
         tibble(
@@ -1441,7 +1610,21 @@ server <- shinyServer(function(input, output, session) {
           date = input$date,
           vial_kit = "",
           label_template_id = "",
-          reg_qa = ""
+          reg_qa = "",
+          version = ""
+        )
+      } else if(input$type=="IMP Manual and Approval Form") {
+        tibble(
+          pdf_name = "0.pdf",
+          protocol = input$trial_number,
+          report_type = input$type,
+          label_spec_id = "",
+          pmd_lot_number = "",
+          date = "",
+          vial_kit = "",
+          label_template_id = "",
+          reg_qa = "",
+          version = input$version
         )
       }
     })
@@ -1482,6 +1665,10 @@ server <- shinyServer(function(input, output, session) {
       } else if (input$type=="Medication Kit List Specification") {
         mutate(df2(), pdf_name=paste(
           df2()[["protocol"]],"Kit List Specification", df2()[["date"]], ".pdf"
+        ))
+      } else if (input$type=="IMP Manual and Approval Form") {
+        mutate(df2(), pdf_name=paste(
+          df2()[["protocol"]],"IP Manual Version", df2()[["version"]], ".pdf"
         ))
       }
     })
